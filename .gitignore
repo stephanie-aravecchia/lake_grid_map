@@ -1,0 +1,28 @@
+# Ignore specific folders or files:
+# We ignore build log and install folders, in case colcon build is not run on the top of the ws
+build/
+install/
+log/
+
+
+# Ignore temporaries.
+*~
+*.user
+*.orig
+*.autosave
+*.swp
+.clang*
+.sublime*
+*.pyc
+*__pycache__*
+*.vscode/*
+
+# Ignore images, videos and possible large files
+*.png
+*.XYZ
+*.tif
+*.jpg
+*.mp4
+*.stl
+*.zip
+*.tar*

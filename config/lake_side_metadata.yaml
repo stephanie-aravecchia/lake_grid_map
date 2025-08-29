@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    use_sim_time: false
+    wait_for_odom: false
+    frame_id: utm_local_symphonie
+    parent_frame_id: utm_local_gte
+    dem_file: <path_to_your_ws>/src/lake_grid_map/data/lake_side.png
+    mesh_file: <run convert_XYZ.py and edit this line with path to your .stl>
+    z_topleft: 198.81
+    z0: 198.81
+    z0-coords: xmin,ymin
+    zmin: 190.40
+    zmax: 199.47
+    resolution: 0.10
+    xmin: 296802.00
+    ymin: 5442522.00
+    xmax: 296893.00
+    ymax: 5442657.00
+    crs: UTM zone 32U (EPSG:32632)
