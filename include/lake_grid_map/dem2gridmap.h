@@ -37,9 +37,11 @@ public:
   
   // Load the dem img as a DEM, and stores it in the elevation_map of the grid_map
   void loadDemInGridmap();
+  void addColorLayer();
   void setLocalToGridmapTransform();
   void keepAlive();
   void publishGridmap();
+  
   
   // State Machine to initialize the grid_map and set static transforms
   void initCallback();
@@ -83,11 +85,13 @@ public:
  
   // Path to DEM image to load 
   std::string img_filename_;
+  std::string color_img_filename_;
 
   // Flags for the initialization
   bool init_complete_;
   bool got_parent_transform_;
   bool wait_for_odom_;
+  bool do_color_;
   
   // ROS timers and TF buffers, listeners, broadcasters
   rclcpp::TimerBase::SharedPtr timer_{nullptr};

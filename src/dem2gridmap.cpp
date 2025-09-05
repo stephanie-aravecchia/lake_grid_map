@@ -11,7 +11,8 @@ Dem2Gridmap::Dem2Gridmap()
   map_(grid_map::GridMap({"elevation"})),
   init_complete_(false),
   got_parent_transform_(false),
-  wait_for_odom_(true)
+  wait_for_odom_(true),
+  do_color_(false)
 {
   // Read the ROS parameters, loads the DEM and stores it into the grid_map map_
   readParameters();
@@ -55,6 +56,7 @@ bool Dem2Gridmap::readParameters() {
   this->declare_parameter("frame_id", std::string("utm_local"));
   this->declare_parameter("parent_frame_id", std::string("utm_local_gte"));
   this->declare_parameter("dem_file", std::string(""));
+  this->declare_parameter("color_img_file", std::string(""));
   this->declare_parameter("rate", rclcpp::ParameterValue(1.0));
   this->declare_parameter("resolution", rclcpp::ParameterValue(0.0));
   this->declare_parameter("xmin", rclcpp::ParameterValue(0.0));
@@ -68,6 +70,7 @@ bool Dem2Gridmap::readParameters() {
   map_frame_id_   = this->get_parameter("frame_id").as_string();
   parent_frame_id_ = this->get_parameter("parent_frame_id").as_string();
   img_filename_  = this->get_parameter("dem_file").as_string();
+  color_img_filename_  = this->get_parameter("color_img_file").as_string();
   resolution_   = this->get_parameter("resolution").as_double();
 
   bbox_.xmin = this->get_parameter("xmin").as_double();
@@ -78,6 +81,10 @@ bool Dem2Gridmap::readParameters() {
   bbox_.zmax = this->get_parameter("zmax").as_double();
 
   wait_for_odom_  = this->get_parameter("wait_for_odom").as_bool();
+  
+  if (color_img_filename_ != "") {
+    do_color_ = true;
+  }
   
   return true;
 }
@@ -114,6 +121,32 @@ void Dem2Gridmap::loadDemInGridmap() {
     RCLCPP_INFO(
       this->get_logger(),
       "Layer Elevation added.");
+  if (do_color_) {
+    addColorLayer();
+  }
+}
+
+// Load the color_image and add it to the grid_map as a new layer
+void Dem2Gridmap::addColorLayer() { 
+  RCLCPP_INFO(
+      this->get_logger(),
+      "Loading color img: %s", color_img_filename_.c_str());
+
+  // Load color image and convert to BGR
+  cv::Mat tmp = cv::imread(color_img_filename_.c_str(), cv::IMREAD_COLOR);
+  assert(!tmp.empty());
+  cv::Mat imgBGR = tmp.clone();
+  //cv::cvtColor(tmp, imgBGR, cv::COLOR_RGB2BGR);
+  cv::cvtColor(tmp, imgBGR, cv::COLOR_BGR2RGB);
+
+  //grid_map::GridMapCvConverter::addLayerFromImage<uint8_t, 3>(tmp, std::string("color"), map_);
+  //That should expect BGR, and that's what opencv should load.. what am i missing?
+  grid_map::GridMapCvConverter::addColorLayerFromImage<uint8_t, 3>(tmp, std::string("color"), map_);
+
+  //grid_map::GridMapCvConverter::addColorLayerFromImage(*msg, "color", map_);
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Layer color added");
   }
 void Dem2Gridmap::publishGridmap(){
   if (init_complete_){
