@@ -4,7 +4,8 @@
     wait_for_odom: false
     frame_id: utm_local_symphonie
     parent_frame_id: utm_local_gte
-    dem_file: <path_to_your_ws>/src/lake_grid_map/data/lake_side.png
+    dem_file: /home/saravecchia/src/github_dev/src/lake_grid_map/data/lake_side.png
+    color_img_file: /home/saravecchia/src/github_dev/src/lake_grid_map/data/lake_side_color_.png
     z_topleft: 198.81
     z0: 198.81
     z0-coords: xmin,ymin

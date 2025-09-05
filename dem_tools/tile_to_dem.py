@@ -25,10 +25,13 @@ class TileToDEM:
         self.dem_fname = ""
         self.yaml_fname = ""
         self.do_color = False
+        self.color_img_fname = ""
         if (len(color_path)>0):
             self.do_color = True
             self.color_tile = rasterio.open(color_path)
-    
+            self.color_img = []
+            self.color_img_fname = ""
+
     # Accessors
     def get_tile_box(self):
         return self.tile.bounds
@@ -176,8 +179,11 @@ class TileToDEM:
             #TODO: initialize the image with gray, and color only the pixels inside the bbox of the image
         cropw = self.get_window_in_tile_from_box(self.color_tile, self.box)
         raster_color = self.color_tile.read(window=cropw)
+        #Reshapes the raster as image, convert to BGR, and resize to match the grid size
         rgb = reshape_as_image(raster_color)
         self.color_img =  rgb[:,:,[2,1,0]] # Convert to BGR
+        target_size = (self.grid.shape[1], self.grid.shape[0])
+        self.color_img = cv2.resize(self.color_img, target_size)
 
     # Interpolate the selected area on a regular grid sampled on the selected resolution
     def interpolate_grid(self, area):
@@ -243,8 +249,8 @@ class TileToDEM:
 
     # Save the color_img
     def save_color_img(self, outputbasename):
-        fname = outputbasename+"_color_.png"
-        cv2.imwrite(fname, self.color_img)
+        self.color_img_fname = outputbasename+"_color_.png"
+        cv2.imwrite(self.color_img_fname, self.color_img)
             
     # Save the interpolated grid into XYZ coordinates
     def save_as_xyz(self, outputbasename):
@@ -306,6 +312,7 @@ class TileToDEM:
                         "frame_id": "utm_local_symphonie",
                         "parent_frame_id": "utm_local_gte",
                         "dem_file": self.dem_fname,
+                        "color_img_file": self.color_img_fname,
                         **base,
                     }
                 }
