@@ -1,4 +1,6 @@
-from tile_to_dem import *
+from tile_to_dem import TileToDEM
+import geopandas as gpd
+import os
 import argparse
 
 '''
@@ -24,7 +26,9 @@ if __name__ == "__main__":
     ## Parse args
     parser = argparse.ArgumentParser(description="DEM preprocessing driver")
     parser.add_argument("--tile", required=True,
-                        help="Tile file (GeoTIFF) to process")
+                        help="Digital Elevation Map Tile file (GeoTIFF) to process")
+    parser.add_argument("--color_tile", required=False, default="",
+                        help="Aerial View (color) Tile file (GeoTIFF) to process")
     parser.add_argument("--xp", required=True,
                         help="Experiment name")
     parser.add_argument("--input_folder", required=True,
@@ -49,7 +53,12 @@ if __name__ == "__main__":
 
     ## Load tile
     tile_path = os.path.join(args.input_folder, args.tile)
-    tile_to_dem = TileToDEM(tile_path)
+    # If aerial view is provided, we load it, else we load the DEM only
+    if len(args.color_tile)>0:
+        color_path = os.path.join(args.input_folder, args.color_tile)
+        tile_to_dem = TileToDEM(tile_path, color_path)
+    else:
+        tile_to_dem = TileToDEM(tile_path)
     print("Tile loaded. Bounds are: ", tile_to_dem.get_tile_box())
     print(args.bbox_latlong)
     ## Get the bbox to extract
@@ -61,7 +70,6 @@ if __name__ == "__main__":
         min_lat, min_lon, max_lat, max_lon = args.bbox_latlong
         tile_to_dem.set_box_from_latlongcorners(min_lat, min_lon, max_lat, max_lon)
     elif args.bbox_utm:
-        #box = latlong_to_round_box(min_lat, min_lon, max_lat, max_lon)
         min_x, min_y, max_x, max_y = args.bbox_utm
         tile_to_dem.set_box_from_utmcorners(min_x, min_y, max_x, max_y)
     else:
@@ -74,13 +82,12 @@ if __name__ == "__main__":
 
     # Save outputs
     output_basename = os.path.join(args.output_folder, str(args.xp))
-    tile_to_dem.save_as_xyz(output_basename)
-    tile_to_dem.save_as_img(output_basename)
-    print("XYZ saved as:  ", tile_to_dem.get_dem_fname())
-    print("Img saved as:  ", tile_to_dem.get_xyz_fname())
+
+    tile_to_dem.save_outputs(output_basename) 
+    print("DEM outputs saved in :", args.output_folder)
     
     # If ros_cfg_output provided, save metadata as ROS yaml config file
-    # Else, save as classic yaml is output_dir
+    # Else, classic yaml has been saved with previous call to save_outputs
     if (len(args.ros_cfg_output)>0):
         cfg_basename = os.path.join(args.ros_cfg_output, str(args.xp))
         yaml_dir = os.path.dirname(cfg_basename)
@@ -88,9 +95,7 @@ if __name__ == "__main__":
             os.makedirs(yaml_dir)
             print("Maked directory: ", yaml_dir)
         tile_to_dem.save_metadata(cfg_basename, ros=True)
-    else: 
-        tile_to_dem.save_metadata(output_basename, ros=False)
-    print("Metadata saved as ", tile_to_dem.get_yaml_fname())
+        print("ROS yaml saved as ", tile_to_dem.get_yaml_fname())
 
 
 

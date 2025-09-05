@@ -5,6 +5,7 @@ import cv2
 import os
 import yaml
 from rasterio.windows import Window
+from rasterio.plot import reshape_as_image
 import geopandas as gpd
 from shapely.geometry import Point
 from scipy.interpolate import griddata
@@ -13,8 +14,9 @@ from math import ceil, floor, isclose
 
 # This class convert a tile containing aerial lidar data into a DEM, from a requested box and resolution
 # The DEM can be saved as an image and/or a .XYZ file
+# Additionally, a colored image corresponding to the aerial view of the same place can be also extracted and saved (if color_path is provided)
 class TileToDEM:
-    def __init__(self, tile_path):
+    def __init__(self, tile_path, color_path=""):
         self.tile = rasterio.open(tile_path)
         self.box = []
         self.resolution = 0.0
@@ -22,6 +24,10 @@ class TileToDEM:
         self.xyz_fname = ""
         self.dem_fname = ""
         self.yaml_fname = ""
+        self.do_color = False
+        if (len(color_path)>0):
+            self.do_color = True
+            self.color_tile = rasterio.open(color_path)
     
     # Accessors
     def get_tile_box(self):
@@ -53,11 +59,11 @@ class TileToDEM:
         return nbox
 
     # Gets a Window object based on the coordinatinates of a bounding box
-    def get_window_from_box(self, single_box):
-        tl = self.tile.index(single_box[0],single_box[3])#topleft
-        bl = self.tile.index(single_box[0],single_box[1])#bottomleft
-        br = self.tile.index(single_box[2],single_box[1])#bottomright
-        tr = self.tile.index(single_box[2],single_box[3])#topright
+    def get_window_in_tile_from_box(self, tile, single_box):
+        tl = tile.index(single_box[0],single_box[3])#topleft
+        bl = tile.index(single_box[0],single_box[1])#bottomleft
+        br = tile.index(single_box[2],single_box[1])#bottomright
+        tr = tile.index(single_box[2],single_box[3])#topright
         xmin = tl[1]
         xmax = tr[1]
         ymax = br[0]
@@ -68,19 +74,19 @@ class TileToDEM:
         return cropw
 
     # Check that a given geometry (bbox) is included in the tile
-    def is_in_tile(self, geom):
+    def is_in_tile(self, geom, tile):
         if hasattr(geom, "bounds"):
             left, bottom, right, top = geom.bounds
         else:
             left, bottom, right, top = geom  # already a tuple
         
-        if (left < self.tile.bounds.left):
+        if (left < tile.bounds.left):
             return False
-        if (right > self.tile.bounds.right):
+        if (right > tile.bounds.right):
             return False
-        if (bottom < self.tile.bounds.bottom):
+        if (bottom < tile.bounds.bottom):
             return False
-        if (top > self.tile.bounds.top):
+        if (top > tile.bounds.top):
             return False
         return True
 
@@ -90,7 +96,7 @@ class TileToDEM:
     # The polygon is also expected in UTM 32N (EPSG:32632)
     def set_box_from_polygon(self, shape):
         geom = shape.iloc[0].geometry
-        if not self.is_in_tile(geom):
+        if not self.is_in_tile(geom, self.tile):
             raise ValueError("Provided polygon is not included in tile. " \
                 "Are the CRS consistent? Tile bounds: %s, Geom bounds %s"\
                 %(str(self.tile.bounds), str(geom.bounds)))
@@ -111,7 +117,7 @@ class TileToDEM:
         # convert to UTM zone 32N (EPSG:32632)
         gdf_utm = gdf.to_crs(epsg=32632)
         geom_bounds = gdf_utm.total_bounds
-        if not self.is_in_tile(geom_bounds):
+        if not self.is_in_tile(geom_bounds, self.tile):
             raise ValueError("Provided polygon is not included in tile. " \
                 "Are the CRS consistent? Tile bounds: %s, Geom bounds %s"\
                 %(str(self.tile.bounds), str(geom_bounds)))
@@ -130,7 +136,7 @@ class TileToDEM:
         )
         # convert to UTM zone 32N (EPSG:32632)
         geom_bounds = gdf.total_bounds
-        if not self.is_in_tile(geom_bounds):
+        if not self.is_in_tile(geom_bounds, self.tile):
             raise ValueError("Provided polygon is not included in tile. " \
                 "Are the CRS consistent? Tile bounds: %s, Geom bounds %s"\
                 %(str(self.tile.bounds), str(geom_bounds)))
@@ -155,10 +161,23 @@ class TileToDEM:
            raise ValueError("Requested resolution is invalid. Make sure grid_size can be divided by resolution. \
                             Grid size is : (%d, %d)"%(self.box[2]-self.box[0],self.box[3]-self.box[1]))
         self.resolution = resolution
-        cropw = self.get_window_from_box(self.box)
+        cropw = self.get_window_in_tile_from_box(self.tile, self.box)
         area = self.tile.read(1, window=cropw)
         self.interpolate_grid(area)
+        if self.do_color:
+            self.crop_color_img(cropw)
 
+    # Extract in the color_tile the Window corresping to the bbox
+    # Save as an image        
+    def crop_color_img(self, cropw):
+        # Initialize the color with grey
+        if not self.is_in_tile(self.box, self.color_tile):
+            raise NotImplementedError("Current bbox in DEM is outside the bounds of the colored image, not implemented")
+            #TODO: initialize the image with gray, and color only the pixels inside the bbox of the image
+        cropw = self.get_window_in_tile_from_box(self.color_tile, self.box)
+        raster_color = self.color_tile.read(window=cropw)
+        rgb = reshape_as_image(raster_color)
+        self.color_img =  rgb[:,:,[2,1,0]] # Convert to BGR
 
     # Interpolate the selected area on a regular grid sampled on the selected resolution
     def interpolate_grid(self, area):
@@ -182,7 +201,51 @@ class TileToDEM:
         grid_z = griddata(points, values, (grid_x, grid_y), method="cubic")
         # And we take the transpose to get back the grid_z as expected
         self.grid = grid_z.T
+    
+    # Interpolate the selected area on a regular grid sampled on the selected resolution
+    def make_color_grid(self, area):
+        # First, we prepare the data for interpolation
+        # points is the list of points corresponding to values in area
+        # values is the 1D array of values in area
+        nx_area = area.shape[1]
+        ny_area = area.shape[0]
+        points = []
+        for j in range(ny_area):
+            for i in range(nx_area):
+                points.append((i,j))
+        values = area.flatten()
+        # Next, we build the interpolation grid, based on the resolution
+        width_m = int(self.box[3]-self.box[1])
+        height_m = int(self.box[2]-self.box[0])
+        nx = int(height_m/self.resolution)
+        ny = int(width_m/self.resolution)
+        grid_x, grid_y = np.mgrid[0:nx_area-1:(nx)*1j,0:ny_area-1:(ny)*1j]
+        # Finally, we interpolate on the selected grid
+        grid_z = griddata(points, values, (grid_x, grid_y), method="cubic")
+        # And we take the transpose to get back the grid_z as expected
+        self.colored_grid = grid_z.T
 
+    # Save all the generated outputs
+    # xyz, dem image, colored image, yaml metadata
+    def save_outputs(self, outputbasename, ros=True, create_dirs = True):
+            output_folder = os.path.dirname(outputbasename)
+            if not os.path.exists(output_folder):
+                if create_dirs:
+                    os.makedirs(output_folder)
+                    print("Created output directory: ", output_folder)
+                else:
+                    raise FileNotFoundError("Output Directory does not exists: %s"%(output_folder))
+            self.save_as_xyz(outputbasename)
+            self.save_as_img(outputbasename)
+            self.save_metadata(outputbasename, ros)
+            if self.do_color:
+                self.save_color_img(outputbasename)
+
+    # Save the color_img
+    def save_color_img(self, outputbasename):
+        fname = outputbasename+"_color_.png"
+        cv2.imwrite(fname, self.color_img)
+            
     # Save the interpolated grid into XYZ coordinates
     def save_as_xyz(self, outputbasename):
         xyz = []
@@ -243,7 +306,6 @@ class TileToDEM:
                         "frame_id": "utm_local_symphonie",
                         "parent_frame_id": "utm_local_gte",
                         "dem_file": self.dem_fname,
-                        "mesh_file": "<run convert_XYZ.py and edit this line with path to your .stl>",
                         **base,
                     }
                 }
