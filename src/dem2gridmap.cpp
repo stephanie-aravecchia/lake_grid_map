@@ -135,13 +135,12 @@ void Dem2Gridmap::addColorLayer() {
   // Load color image and convert to BGR
   cv::Mat tmp = cv::imread(color_img_filename_.c_str(), cv::IMREAD_COLOR);
   assert(!tmp.empty());
-  cv::Mat imgBGR = tmp.clone();
-  //cv::cvtColor(tmp, imgBGR, cv::COLOR_RGB2BGR);
-  cv::cvtColor(tmp, imgBGR, cv::COLOR_BGR2RGB);
+  cv::Mat imgRGB = tmp.clone();
+  int from_to[] = {0,2, 1,1, 2,0};
+  cv::mixChannels(&tmp, 1, &imgRGB, 1, from_to, 3);
 
-  //grid_map::GridMapCvConverter::addLayerFromImage<uint8_t, 3>(tmp, std::string("color"), map_);
-  //That should expect BGR, and that's what opencv should load.. what am i missing?
-  grid_map::GridMapCvConverter::addColorLayerFromImage<uint8_t, 3>(tmp, std::string("color"), map_);
+  // Then, add it as a color layer
+  grid_map::GridMapCvConverter::addColorLayerFromImage<uint8_t, 3>(imgRGB, std::string("color"), map_);
 
   //grid_map::GridMapCvConverter::addColorLayerFromImage(*msg, "color", map_);
     RCLCPP_INFO(
