@@ -2,7 +2,10 @@
 
 This package contains two main parts:
 - a python script to generate the DEM as an image from a .tif file  
-- a ROS2 node serving this DEM as a grid_map  
+- a ROS2 node serving this DEM as a grid_map, with an elevation layer, and a color layer containing the aerial view if available.  
+
+![Visualization of the DEM colored with aerial view in Rviz](pics/rviz_screenshot.png)
+
 
 ---
 
@@ -19,6 +22,7 @@ In `dem_tools/`
 - Useful website to check coordinates: [https://coordinates-converter.com/](https://coordinates-converter.com/)  
 
 This code also saves the DEM image metadata either as a classic YAML file or as a config file for ROS params.  
+If an aerial view is available, passing the argument --color_tile will save the overhead image of the same area.
 
 **Example usage:**
 ```bash
@@ -41,6 +45,7 @@ The node `dem2gridmap` is the ROS Wrapper on the class *DEM* implemented in `DEM
 - **class Dem2Gridmap**: 
     - ROS2 wrapper on DEM 
     - This wrapper convert the DEM into a grid_map msgs, stores it in an elevation layer, and publishes it
+    - If provided, a "color" layer is added containing the aerial view.
     - This wrapper also correct the Z offset from the robot localization to the DEM frame
 
 Example usage:
@@ -54,4 +59,4 @@ Options:
 - by default: `use_sim_time: false`
 
 
-An example DEM is provided : **data/lake_side.png**
+An example DEM is provided : **data/lake_side.png**, and the overhead image: **data/lake_side_color.png**
